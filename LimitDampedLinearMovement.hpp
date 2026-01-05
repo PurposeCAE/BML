@@ -10,81 +10,81 @@ namespace bml {
 	template <std::floating_point Time_t, std::floating_point Value_t>
 	class LimitDampedLinearMovement {
 	public:
-		constexpr LimitDampedLinearMovement(Value_t stroke, Time_t duration, Time_t accelerationTime, Value_t current = 0)
-			: MAX_ACCELERATION(determineMaxAcceleration(stroke, duration, accelerationTime))
-			, MAX_VELOCITY(determineMaxVelocity(accelerationTime))
-			, ACCELERATION_WIDTH(determineAccelerationWidth(accelerationTime))
+		constexpr LimitDampedLinearMovement(Value_t stroke, Time_t duration, Value_t dampingStroke, Value_t current = 0)
+			: MAX_ACCELERATION(determineMaxAcceleration(stroke, duration, dampingStroke))
+			, MAX_VELOCITY(determineMaxVelocity(dampingStroke))
+			, DAMPING_STROKE(dampingStroke)
 			, _current(current)
 		{ }
 
-		constexpr Value_t Step(Time_t dt, Value_t target) {
+		constexpr Value_t Step(Time_t dt, Value_t target) noexcept {
+			if (target == _current) [[likely]] {
+				currentVelocity = Value_t{ 0 };
+				return _current;
+			}
+
 			Value_t deviation = target - _current;
 			Value_t absDeviation = std::abs(deviation);
 			Value_t direction = deviation < Value_t{ 0 } ? Value_t{ -1.0 } : Value_t{ 1.0 };
-			
-			// Deceleration
-			if (absDeviation <= ACCELERATION_WIDTH) {
-				currentVelocity -= direction * MAX_ACCELERATION * static_cast<Value_t>(dt);
-			}
 
+			// Deceleration
+			if (absDeviation <= DAMPING_STROKE) 
+				currentVelocity -= direction * MAX_ACCELERATION * static_cast<Value_t>(dt);
 			// Acceleration
-			else {
+			else 
 				currentVelocity += direction * MAX_ACCELERATION * static_cast<Value_t>(dt);
-			}
 
 			// Linear movement
 			if (std::abs(currentVelocity) >= MAX_VELOCITY) {
 				currentVelocity = MAX_VELOCITY * direction;
 			}
 
-			// Euler
-			_current += currentVelocity * static_cast<Value_t>(dt);
+			Value_t step = currentVelocity * static_cast<Value_t>(dt);
 
 			// Target reached
-			if (deviation <= static_cast<Value_t>(dt) * MAX_VELOCITY) {
+			if (std::abs(step) >= absDeviation) {
 				_current = target;
 				currentVelocity = Value_t{ 0 };
+			}
+
+			// Euler
+			else [[likely]] {
+				_current += step;
 			}
 
 			return _current;
 		}
 
+		constexpr Value_t get_velocity() const noexcept {
+			return currentVelocity;
+		}
+
 	private:
 		const Value_t MAX_ACCELERATION;
 		const Value_t MAX_VELOCITY;
-		const Value_t ACCELERATION_WIDTH;
-		static void evaluateParameters(Value_t stroke, Time_t duration, Time_t accelerationTime) {
+		const Value_t DAMPING_STROKE;
+		static void evaluateParameters(Value_t stroke, Time_t duration, Value_t dampingStroke) {
 			if (stroke < Value_t{ 0 })
 				throw std::invalid_argument("Stroke is less than 0!");
-			if (duration < Time_t{ 0 })
-				throw std::invalid_argument("Duration is less than 0!");
-			if (accelerationTime < Time_t{ 0 })
-				throw std::invalid_argument("AccelerationTime is less than 0!");
-
-			Value_t t_acc = static_cast<Value_t>(accelerationTime);
-			if ((t_acc * t_acc - 2 * t_acc + static_cast<Value_t>(duration)) == Value_t{ 0 })
-				throw std::invalid_argument("Parameter constillation would result in division by zero!");
+			if (duration <= Time_t{ 0 })
+				throw std::invalid_argument("Duration is less or equal than 0!");
+			if (dampingStroke <= Value_t{ 0 })
+				throw std::invalid_argument("AccelerationTime is less or equal than 0!");
+			if (dampingStroke * 2 > stroke)
+				throw std::invalid_argument("DampingStroke is to big!")
 		}
-		static Value_t determineMaxAcceleration(Value_t stroke, Time_t duration, Time_t accelerationTime) {
-			evaluateParameters(stroke, duration, accelerationTime);
+		static Value_t determineMaxAcceleration(Value_t stroke, Time_t duration, Value_t dampingStroke) {
+			evaluateParameters(stroke, duration, dampingStroke);
 
-			Value_t t_acc = static_cast<Value_t>(accelerationTime);
-
-			return (stroke - 2 * t_acc * t_acc - static_cast<Value_t>(duration) * t_acc)
-				/ (t_acc * t_acc - 2 * t_acc + duration);
+			return (stroke * stroke + Value_t{ 4.0 } * dampingStroke + Value_t{ 4.0 } * dampingStroke * dampingStroke)
+				/ (Value_t{ 2.0 } * dampingStroke * static_cast<Value_t>(duration) * static_cast<Value_t>(duration));
 		}
-		constexpr Value_t determineMaxVelocity(Time_t accelerationTime) const noexcept {
-			return MAX_ACCELERATION * static_cast<Value_t>(accelerationTime);
-		}
-		constexpr Value_t determineAccelerationWidth(Time_t accelerationTime) const noexcept {
-			return Value_t{ 0.5 }
-				* MAX_ACCELERATION
-				* static_cast<Value_t> (accelerationTime)
-				* static_cast<Value_t> (accelerationTime);
+		constexpr Value_t determineMaxVelocity(Value_t dampingStroke) const noexcept {
+			return std::sqrt(Value_t{ 2.0 } * dampingStroke * MAX_ACCELERATION);
 		}
 
 		Value_t _current;
-		Value_t currentVelocity;
+		Value_t currentVelocity = 0;
 	};
 }
 
