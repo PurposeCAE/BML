@@ -10,14 +10,14 @@ namespace bml {
 	template <std::floating_point Time_t, std::floating_point Value_t>
 	class LimitDampedLinearMovement {
 	public:
-		constexpr LimitDampedLinearMovement(Value_t stroke, Time_t duration, Value_t dampingStroke, Value_t current = 0)
+		LimitDampedLinearMovement(Value_t stroke, Time_t duration, Value_t dampingStroke, Value_t current = 0)
 			: MAX_ACCELERATION(determineMaxAcceleration(stroke, duration, dampingStroke))
 			, MAX_VELOCITY(determineMaxVelocity(dampingStroke))
 			, DAMPING_STROKE(dampingStroke)
 			, _current(current)
 		{ }
 
-		constexpr Value_t Step(Time_t dt, Value_t target) noexcept {
+		Value_t Step(Time_t dt, Value_t target) noexcept {
 			if (target == _current) [[likely]] {
 				currentVelocity = Value_t{ 0 };
 				return _current;
@@ -55,7 +55,7 @@ namespace bml {
 			return _current;
 		}
 
-		constexpr Value_t get_velocity() const noexcept {
+		Value_t get_velocity() const noexcept {
 			return currentVelocity;
 		}
 
@@ -71,7 +71,7 @@ namespace bml {
 			if (dampingStroke <= Value_t{ 0 })
 				throw std::invalid_argument("AccelerationTime is less or equal than 0!");
 			if (dampingStroke * 2 > stroke)
-				throw std::invalid_argument("DampingStroke is to big!")
+				throw std::invalid_argument("DampingStroke is to big!");
 		}
 		static Value_t determineMaxAcceleration(Value_t stroke, Time_t duration, Value_t dampingStroke) {
 			evaluateParameters(stroke, duration, dampingStroke);
@@ -79,7 +79,7 @@ namespace bml {
 			return (stroke * stroke + Value_t{ 4.0 } * dampingStroke + Value_t{ 4.0 } * dampingStroke * dampingStroke)
 				/ (Value_t{ 2.0 } * dampingStroke * static_cast<Value_t>(duration) * static_cast<Value_t>(duration));
 		}
-		constexpr Value_t determineMaxVelocity(Value_t dampingStroke) const noexcept {
+		Value_t determineMaxVelocity(Value_t dampingStroke) const noexcept {
 			return std::sqrt(Value_t{ 2.0 } * dampingStroke * MAX_ACCELERATION);
 		}
 
